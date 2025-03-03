@@ -1,0 +1,41 @@
+Step 1: Create a Dockerfile
+# Use a RHEL base image
+FROM registry.access.redhat.com/ubi8/ubi:latest
+
+# Install necessary dependencies
+RUN yum -y update && \
+    yum -y install epel-release && \
+    yum -y install R wget sudo && \
+    yum clean all
+
+# Download and install RStudio Server
+RUN wget https://download2.rstudio.org/server/centos8/x86_64/rstudio-server-rhel-2023.06.1-524-x86_64.rpm && \
+    yum -y install rstudio-server-rhel-2023.06.1-524-x86_64.rpm && \
+    rm rstudio-server-rhel-2023.06.1-524-x86_64.rpm
+
+# Expose the RStudio Server port
+EXPOSE 8787
+
+# Set environment variables for RStudio
+ENV USER=rstudio
+ENV PASSWORD=yourpassword
+
+# Create a user for RStudio
+RUN useradd -m -s /bin/bash $USER && \
+    echo "$USER:$PASSWORD" | chpasswd && \
+    echo "$USER ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+# Set the working directory
+WORKDIR /home/$USER
+
+# Start RStudio Server
+CMD ["/usr/lib/rstudio-server/bin/rserver", "--server-daemonize=0"]
+
+Step 2: Build the Docker Image
+docker build -t rstudio-server-rhel .
+
+Step 3: Run the Docker Container
+docker run -d -p 8787:8787 --name rstudio-server-rhel rstudio-server-rhel
+
+
+
