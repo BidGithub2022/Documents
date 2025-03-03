@@ -1,0 +1,29 @@
+# Use a RHEL base image
+FROM registry.access.redhat.com/ubi8/ubi:latest
+
+# Install necessary dependencies
+RUN yum -y update && \
+    yum -y install java-11-openjdk wget unzip && \
+    yum clean all
+
+# Set environment variables for JMeter
+ENV JMETER_VERSION 5.5
+ENV JMETER_HOME /opt/apache-jmeter-${JMETER_VERSION}
+ENV PATH $JMETER_HOME/bin:$PATH
+
+# Download and install JMeter
+RUN wget https://downloads.apache.org//jmeter/binaries/apache-jmeter-${JMETER_VERSION}.tgz && \
+    tar -xzf apache-jmeter-${JMETER_VERSION}.tgz -C /opt && \
+    rm apache-jmeter-${JMETER_VERSION}.tgz
+
+# Set the working directory
+WORKDIR $JMETER_HOME
+
+# Default command to run JMeter
+CMD ["jmeter", "-n", "-t", "/test/test.jmx", "-l", "/test/results.jtl"]
+
+
+
+  docker build -t jmeter-rhel .
+
+ docker run --rm -v $(pwd):/test jmeter-rhel
