@@ -1,0 +1,41 @@
+# Install qemu-user-static on your system
+sudo dnf install qemu-user-static
+
+# Register QEMU handlers
+sudo podman run --rm --privileged multiarch/qemu-user-static --reset -p yes
+
+# Use a multi-stage build
+ARG TARGETARCH
+
+Dockerfile:
+# First stage - architecture-specific base
+FROM --platform=$TARGETPLATFORM registry.access.redhat.com/ubi8/ubi:latest AS base
+
+# Install necessary packages and update certificates
+RUN dnf -y update && \
+    dnf -y install ca-certificates && \
+    update-ca-trust && \
+    dnf clean all
+
+# Second stage - your application
+FROM base
+
+# Your application specific instructions here
+# ...
+
+Steps:
+# Create the manifest
+podman manifest create myimage:latest
+
+# Build for AMD64
+podman build --platform=linux/amd64 --manifest myimage:latest .
+
+# Build for ARM64
+podman build --platform=linux/arm64 --manifest myimage:latest .
+
+# Push the manifest
+podman manifest push myimage:latest docker://myregistry/myimage:latest
+
+
+
+
