@@ -1,0 +1,44 @@
+FROM registry.access.redhat.com/ubi8/ubi:latest
+
+# Install required packages
+RUN yum -y update && \
+    yum -y install java-11-openjdk-devel wget unzip \
+    xorg-x11-server-Xvfb x11vnc python3-pip && \
+    yum clean all
+
+# Install noVNC
+RUN pip3 install novnc
+
+# Install JMeter
+ENV JMETER_VERSION="5.5"
+ENV JMETER_HOME="/opt/apache-jmeter"
+ENV PATH="$JMETER_HOME/bin:$PATH"
+
+RUN wget https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-${JMETER_VERSION}.tgz && \
+    tar -xzf apache-jmeter-${JMETER_VERSION}.tgz -C /opt && \
+    ln -s /opt/apache-jmeter-${JMETER_VERSION} ${JMETER_HOME} && \
+    rm apache-jmeter-${JMETER_VERSION}.tgz
+
+COPY start-novnc.sh /start.sh
+RUN chmod +x /start.sh
+
+EXPOSE 6080
+
+CMD ["/start.sh"]
+
+
++++
+#!/bin/bash
+export DISPLAY=:1
+Xvfb :1 -screen 0 1024x768x16 &
+sleep 1
+x11vnc -display :1 -forever -shared &
+/usr/local/bin/novnc_server --vnc localhost:5900 --listen 6080 &
+jmeter
+
++++
+docker run -d \
+    --name jmeter-novnc \
+    -p 6080:6080 \
+    -v $PWD:/jmeter \
+    jmeter-novnc
