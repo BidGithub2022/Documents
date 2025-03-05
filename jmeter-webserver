@@ -1,0 +1,29 @@
+FROM registry.access.redhat.com/ubi8/ubi:latest
+
+# Install dependencies
+RUN yum -y update && \
+    yum -y install java-11-openjdk-devel wget unzip nodejs npm && \
+    yum clean all
+
+# Install JMeter
+ENV JMETER_VERSION="5.5"
+ENV JMETER_HOME="/opt/apache-jmeter"
+ENV PATH="$JMETER_HOME/bin:$PATH"
+
+RUN wget https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-${JMETER_VERSION}.tgz && \
+    tar -xzf apache-jmeter-${JMETER_VERSION}.tgz -C /opt && \
+    ln -s /opt/apache-jmeter-${JMETER_VERSION} ${JMETER_HOME} && \
+    rm apache-jmeter-${JMETER_VERSION}.tgz
+
+# Install jmeter-web-server
+RUN npm install -g jmeter-web-server
+
+EXPOSE 8080
+
+# Start JMeter Web Server
+CMD ["jmeter-web-server", "--port", "8080", "--jmeter-path", "/opt/apache-jmeter/bin/jmeter"]
+
+++++
+
+
+docker run -d -p 8080:8080 --name jmeter-web jmeter-image
