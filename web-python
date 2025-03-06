@@ -1,0 +1,219 @@
+FROM registry.access.redhat.com/ubi8/ubi:latest
+
+# Install dependencies
+RUN yum -y update && \
+    yum -y install java-11-openjdk-devel wget unzip python3 && \
+    yum clean all
+
+# Install JMeter
+ENV JMETER_VERSION="5.5"
+ENV JMETER_HOME="/opt/apache-jmeter"
+ENV PATH="$JMETER_HOME/bin:$PATH"
+
+RUN wget https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-${JMETER_VERSION}.tgz && \
+    tar -xzf apache-jmeter-${JMETER_VERSION}.tgz -C /opt && \
+    ln -s /opt/apache-jmeter-${JMETER_VERSION} ${JMETER_HOME} && \
+    rm apache-jmeter-${JMETER_VERSION}.tgz
+
+# Create directories for test plans and results
+RUN mkdir -p /jmeter/testplans /jmeter/results
+
+# Copy web server files
+COPY server.py /app/
+COPY templates/ /app/templates/
+
+WORKDIR /app
+
+EXPOSE 8080
+
+CMD ["python3", "server.py"]
+
++++server.py
+from http.server import HTTPServer, SimpleHTTPRequestHandler
+import os
+import subprocess
+import cgi
+import json
+from datetime import datetime
+
+class JMeterHandler(SimpleHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == '/':
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+            
+            with open('templates/index.html', 'r') as f:
+                content = f.read()
+            self.wfile.write(content.encode())
+            
+        elif self.path == '/list_tests':
+            tests = os.listdir('/jmeter/testplans')
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(tests).encode())
+            
+        elif self.path.startswith('/results/'):
+            result_file = self.path.split('/')[-1]
+            with open(f'/jmeter/results/{result_file}', 'r') as f:
+                content = f.read()
+            self.send_response(200)
+            self.send_header('Content-type', 'text/plain')
+            self.end_headers()
+            self.wfile.write(content.encode())
+
+    def do_POST(self):
+        if self.path == '/run_test':
+            form = cgi.FieldStorage(
+                fp=self.rfile,
+                headers=self.headers,
+                environ={'REQUEST_METHOD': 'POST'}
+            )
+            
+            test_plan = form.getvalue('test_plan')
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            result_file = f'result_{timestamp}.jtl'
+            
+            cmd = [
+                'jmeter',
+                '-n',
+                '-t', f'/jmeter/testplans/{test_plan}',
+                '-l', f'/jmeter/results/{result_file}'
+            ]
+            
+            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            stdout, stderr = process.communicate()
+            
+            response = {
+                'status': 'success' if process.returncode == 0 else 'error',
+                'output': stdout.decode(),
+                'error': stderr.decode(),
+                'result_file': result_file
+            }
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode())
+
+if __name__ == '__main__':
+    server_address = ('', 8080)
+    httpd = HTTPServer(server_address, JMeterHandler)
+    print('Server running on port 8080...')
+    httpd.serve_forever()
+
++++
+index.html:
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>JMeter Web Interface</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .button {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 15px 32px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+        }
+        #results {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>JMeter Web Interface</h1>
+        
+        <h2>Available Test Plans</h2>
+        <select id="testPlan">
+            <option value="">Loading...</option>
+        </select>
+        
+        <button class="button" onclick="runTest()">Run Test</button>
+        
+        <div id="results"></div>
+    </div>
+
+    <script>
+        // Load test plans
+        fetch('/list_tests')
+            .then(response => response.json())
+            .then(tests => {
+                const select = document.getElementById('testPlan');
+                select.innerHTML = tests.map(test => 
+                    `<option value="${test}">${test}</option>`
+                ).join('');
+            });
+
+        function runTest() {
+            const testPlan = document.getElementById('testPlan').value;
+            if (!testPlan) return;
+
+            const formData = new FormData();
+            formData.append('test_plan', testPlan);
+
+            fetch('/run_test', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                const results = document.getElementById('results');
+                if (data.status === 'success') {
+                    results.innerHTML = `
+                        <h3>Test Completed</h3>
+                        <p>Results saved to: ${data.result_file}</p>
+                        <pre>${data.output}</pre>
+                    `;
+                } else {
+                    results.innerHTML = `
+                        <h3>Test Failed</h3>
+                        <pre>${data.error}</pre>
+                    `;
+                }
+            });
+        }
+    </script>
+</body>
+</html>
+
++++
+devfile:
+schemaVersion: 2.1.0
+metadata:
+  name: jmeter-workspace
+components:
+  - name: jmeter
+    container:
+      image: jmeter-image:latest
+      memoryLimit: 2Gi
+      endpoints:
+        - name: jmeter-web
+          targetPort: 8080
+          exposure: public
+          protocol: http
+          secure: false
+      mountSources: true
+      volumeMounts:
+        - name: testplans
+          path: /jmeter/testplans
+        - name: results
+          path: /jmeter/results
