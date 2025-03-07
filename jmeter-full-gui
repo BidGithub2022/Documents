@@ -1,0 +1,71 @@
+FROM registry.access.redhat.com/ubi8/ubi:latest
+
+# Install required packages
+RUN yum -y update && \
+    yum -y install java-11-openjdk-devel wget unzip \
+    xorg-x11-server-Xvfb x11vnc python3-pip \
+    xorg-x11-xinit xorg-x11-server-Xorg \
+    gtk3 libXtst libXrender libXt \
+    fluxbox xterm && \
+    yum clean all
+
+# Install noVNC
+RUN pip3 install novnc websockify
+
+# Install JMeter
+ENV JMETER_VERSION="5.5"
+ENV JMETER_HOME="/opt/apache-jmeter"
+ENV PATH="$JMETER_HOME/bin:$PATH"
+ENV DISPLAY=:1
+
+RUN wget https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-${JMETER_VERSION}.tgz && \
+    tar -xzf apache-jmeter-${JMETER_VERSION}.tgz -C /opt && \
+    ln -s /opt/apache-jmeter-${JMETER_VERSION} ${JMETER_HOME} && \
+    rm apache-jmeter-${JMETER_VERSION}.tgz
+
+# Create directories for JMeter
+RUN mkdir -p /jmeter/testplans /jmeter/results
+
+# Create startup script
+COPY start.sh /start.sh
+RUN chmod +x /start.sh
+
+EXPOSE 6080
+
+CMD ["/start.sh"]
+
++++
+start.sh
+*****
+
+
+#!/bin/bash
+
+# Start Xvfb
+Xvfb :1 -screen 0 1024x768x24 &
+sleep 2
+
+# Start window manager
+fluxbox &
+sleep 1
+
+# Start VNC server
+x11vnc -display :1 -forever -shared &
+sleep 1
+
+# Start noVNC
+websockify --web /usr/local/lib/python3.6/site-packages/novnc/ 6080 localhost:5900 &
+sleep 1
+
+# Start JMeter in GUI mode
+jmeter -Djava.awt.headless=false
+
++++
+
+
+docker run -d \
+    --name jmeter-gui \
+    -p 6080:6080 \
+    -v $(pwd)/testplans:/jmeter/testplans \
+    -v $(pwd)/results:/jmeter/results \
+    jmeter-image
