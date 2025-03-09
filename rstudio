@@ -37,5 +37,49 @@ docker build -t rstudio-server-rhel .
 Step 3: Run the Docker Container
 docker run -d -p 8787:8787 --name rstudio-server-rhel rstudio-server-rhel
 
+____
+# Use a RHEL base image
+FROM registry.access.redhat.com/ubi8/ubi:latest
+
+# Install necessary dependencies
+RUN yum -y update && \
+    yum -y install epel-release && \
+    yum -y install dnf-plugins-core && \
+    yum config-manager --set-enabled codeready-builder-for-rhel-8-x86_64-rpms && \
+    yum -y install R wget sudo openssl openssl-devel && \
+    yum clean all
+
+# Install OpenSSL 3
+RUN yum -y install --enablerepo=epel \
+    openssl3 openssl3-devel && \
+    yum clean all
+
+# Download and install RStudio Server
+RUN wget https://download2.rstudio.org/server/centos8/x86_64/rstudio-server-rhel-2023.06.1-524-x86_64.rpm && \
+    yum -y install rstudio-server-rhel-2023.06.1-524-x86_64.rpm && \
+    rm rstudio-server-rhel-2023.06.1-524-x86_64.rpm
+
+# Create symlink for OpenSSL 3 if needed
+RUN if [ ! -f "/usr/lib64/libssl.so.3" ]; then \
+    ln -s /usr/lib64/openssl3/libssl.so.3 /usr/lib64/libssl.so.3; \
+    fi
+
+# Expose the RStudio Server port
+EXPOSE 8787
+
+# Set environment variables for RStudio
+ENV USER=rstudio
+ENV PASSWORD=yourpassword
+
+# Create a user for RStudio
+RUN useradd -m -s /bin/bash $USER && \
+    echo "$USER:$PASSWORD" | chpasswd && \
+    echo "$USER ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+# Set the working directory
+WORKDIR /home/$USER
+
+# Start RStudio Server
+CMD ["/usr/lib/rstudio-server/bin/rserver", "--server-daemonize=0"]
 
 
