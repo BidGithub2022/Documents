@@ -1,0 +1,43 @@
+schemaVersion: 2.2.0
+metadata:
+  name: rstudio-workspace
+  displayName: RStudio Workspace
+  description: RStudio development environment with R 4.3.3
+  tags:
+    - R
+    - RStudio
+    - Statistics
+
+components:
+  - name: rstudio
+    container:
+      # Replace with your image location
+      image: image-registry.openshift-image-registry.svc:5000/your-project/rstudio-server:latest
+      memoryLimit: 4Gi
+      memoryRequest: 2Gi
+      cpuLimit: "2"
+      cpuRequest: "1"
+      mountSources: true
+      endpoints:
+        - name: rstudio-server
+          targetPort: 8787
+          exposure: public
+          protocol: http
+          secure: false
+      volumeMounts:
+        - name: r-packages
+          path: /usr/local/lib/R/library
+
+  - name: r-packages
+    volume:
+      size: 2Gi
+
+commands:
+  - id: start-rstudio
+    exec:
+      component: rstudio
+      commandLine: "/usr/lib/rstudio-server/bin/rserver --server-daemonize=0"
+      workingDir: ${PROJECT_SOURCE}
+      group:
+        kind: run
+        isDefault: true
