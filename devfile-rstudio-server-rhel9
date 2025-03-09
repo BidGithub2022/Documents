@@ -11,7 +11,6 @@ metadata:
 components:
   - name: rstudio
     container:
-      # Replace with your image location
       image: image-registry.openshift-image-registry.svc:5000/your-project/rstudio-server:latest
       memoryLimit: 4Gi
       memoryRequest: 2Gi
@@ -24,19 +23,49 @@ components:
           exposure: public
           protocol: http
           secure: false
+      env:
+        - name: HOME
+          value: /home/rstudio
+        - name: USER
+          value: rstudio
+      command: ["/bin/sh"]
+      args: 
+        - -c
+        - |
+          mkdir -p /var/run/rstudio-server
+          mkdir -p /var/lock/rstudio-server
+          mkdir -p /var/lib/rstudio-server
+          chown -R rstudio:rstudio /var/run/rstudio-server /var/lock/rstudio-server /var/lib/rstudio-server
+          exec /usr/lib/rstudio-server/bin/rserver --server-daemonize=0 --server-user=rstudio --auth-none=1
       volumeMounts:
         - name: r-packages
           path: /usr/local/lib/R/library
+
+  - name: tools
+    container:
+      image: registry.access.redhat.com/ubi9/ubi:latest
+      memoryLimit: 2Gi
+      memoryRequest: 1Gi
+      mountSources: true
+      command: ['/bin/sh']
+      args: ['-c', 'while true; do sleep 30; done']
+      volumeMounts:
+        - name: shared-data
+          path: /workspace
 
   - name: r-packages
     volume:
       size: 2Gi
 
+  - name: shared-data
+    volume:
+      size: 1Gi
+
 commands:
-  - id: start-rstudio
+  - id: shell-tools
     exec:
-      component: rstudio
-      commandLine: "/usr/lib/rstudio-server/bin/rserver --server-daemonize=0"
+      component: tools
+      commandLine: bash
       workingDir: ${PROJECT_SOURCE}
       group:
         kind: run
