@@ -1,1 +1,3 @@
 podman pull quay.io/mailtobidyut/images/che-ide-dev-server
+
+podman pull quay.io/mailtobidyut/images/che-ide-dev-server-amd64
