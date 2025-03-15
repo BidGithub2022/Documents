@@ -1,0 +1,9 @@
+command:
+  - /bin/sh
+  - -c
+  - |
+    set -x
+    /entrypoint-init-container.sh idea-ultimate > /idea-server/init.log 2>&1
+    echo "Init container exit code: $?" >> /idea-server/init.log
+    ls -la /idea-server >> /idea-server/init.log
+
