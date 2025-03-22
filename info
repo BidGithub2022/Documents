@@ -1,2 +1,7 @@
 -Djava.net.preferIPv4Stack=true
 -Dhttp.nonProxyHosts=localhost|127.0.0.1
+
+mailtobidyutimages/jmeter-gui-ubi9
+
+podman run -d --name jmeter -p 6080:6080 -p 5901:5901 quay.io/mailtobidyut/jmeter-gui-ubi9:latest
+sudo podman run -d --name jmeter -p 6080:6080 -p 5901:5901 quay.io/mailtobidyut/jmeter-gui-ubi9:latest
